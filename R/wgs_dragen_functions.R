@@ -316,30 +316,15 @@ PlotWgsCnvGrid <- function(df_cov, df_ai, call_seg, gender, prefix) {
     ) %>%
     dplyr::filter(size > 5000000, !is.na(CN_for_ylim), is.finite(CN_for_ylim))
 
-  if (nrow(y_lim_source) > 0) {
-    y_lim <- max(y_lim_source$CN_for_ylim, na.rm = TRUE) + 2
-  } else {
+ 
     # Fallback only if no large segments are available.
-    y_lim <- suppressWarnings(max(df_cov$smoothed_bin_cnf, na.rm = TRUE))
-    if (!is.finite(y_lim)) {
-      y_lim <- 4
-    }
-    y_lim <- ceiling(y_lim) + 1
-  }
+   y_lim <- 8
 
-  y_lim <- max(4, y_lim)
-  y_lim <- min(8, y_lim)
-
-  if (y_lim >= 8) {
+ 
     p_margin <- margin(t = 1, r = 1, b = 0.5, l = 2, unit = "pt")
     q_margin <- margin(t = 0, r = 1, b = 0.5, l = 7, unit = "pt")
-    line_pos <- c(4, 6)
-  } else {
-    p_margin <- margin(t = 1, r = 1, b = 0.5, l = 2, unit = "pt")
-    q_margin <- margin(t = 0, r = 1, b = 0.5, l = 2, unit = "pt")
-    line_pos <- c(1, 4)
-  }
-
+    line_pos <- c(1,3,4,5,6,7,8)
+ 
   df_cov <- df_cov %>%
     dplyr::mutate(
       smoothed_bin_cnf = ifelse(smoothed_bin_cnf >= y_lim, y_lim, smoothed_bin_cnf),
