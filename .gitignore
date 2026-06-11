@@ -1,0 +1,16 @@
+.DS_Store
+._*
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+data/
+input/
+output/
+*.csv
+*.tsv
+*.xlsx
+*.rds
+*.RDS
+*.log
