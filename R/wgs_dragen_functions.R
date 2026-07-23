@@ -291,46 +291,34 @@ PlotWgsCnvGrid <- function(df_cov, df_ai, call_seg, gender, prefix) {
   } else {
     chrom_levels <- c(as.character(1:22), "X")
   }
-
+  
   color <- rep(
     c("darkblue", "darkgreen", "darkred", "darkorchid4", "darkgoldenrod"),
     length.out = length(chrom_levels)
   )
   names(color) <- chrom_levels
-
+  
   df_cov <- df_cov %>%
     dplyr::mutate(seqnames = StandardizeChrom(contig))
-
+  
   df_cov$seqnames <- factor(StandardizeChrom(df_cov$seqnames), levels = chrom_levels)
   df_ai$seqnames <- factor(StandardizeChrom(df_ai$seqnames), levels = chrom_levels)
   call_seg$seqnames <- factor(StandardizeChrom(call_seg$seqnames), levels = chrom_levels)
-
-  # CNV y-axis strategy:
-  # Only large annotation segments affect y_lim, so tiny high-CN spikes do not stretch the plot.
-  # This follows the same idea as the original plotting script, with a 5 Mb minimum segment size
-  # and a hard display cap at copy number 8.
-  y_lim_source <- call_seg %>%
-    dplyr::mutate(
-      size = as.numeric(End) - as.numeric(Start),
-      CN_for_ylim = suppressWarnings(as.numeric(CN))
-    ) %>%
-    dplyr::filter(size > 5000000, !is.na(CN_for_ylim), is.finite(CN_for_ylim))
-
- 
-    # Fallback only if no large segments are available.
-   y_lim <- 8
-
- 
-    p_margin <- margin(t = 1, r = 1, b = 0.5, l = 2, unit = "pt")
-    q_margin <- margin(t = 0, r = 1, b = 0.5, l = 7, unit = "pt")
-    line_pos <- c(1,3,4,5,6,7,8)
- 
+  
+  y_lim <- 8
+  
+  p_margin <- ggplot2::margin(t = 1, r = 6, b = 0.5, l = 38, unit = "pt")
+  q_margin <- ggplot2::margin(t = 0, r = 6, b = 0.5, l = 38, unit = "pt")
+  qc_margin <- ggplot2::margin(t = 0, r = 6, b = 0.5, l = 38, unit = "pt")
+  
+  line_pos <- c(1, 3, 4, 5, 6, 7, 8)
+  
   df_cov <- df_cov %>%
     dplyr::mutate(
       smoothed_bin_cnf = ifelse(smoothed_bin_cnf >= y_lim, y_lim, smoothed_bin_cnf),
       smoothed_bin_cnf = ifelse(smoothed_bin_cnf < 0, 0, smoothed_bin_cnf)
     )
-
+  
   call_seg_maf <- call_seg %>%
     dplyr::mutate(
       MAF = as.numeric(MAF),
@@ -338,14 +326,36 @@ PlotWgsCnvGrid <- function(df_cov, df_ai, call_seg, gender, prefix) {
       baf_lower = pmin(MAF, 1 - MAF),
       baf_upper = 1 - baf_lower
     ) %>%
-    dplyr::filter(!is.na(baf_lower), !is.na(baf_upper), baf_lower >= 0, baf_upper <= 1)
-
-  p <- ggplot() +
-    geom_hline(yintercept = 2, color = "black", linewidth = 0.7) +
-    geom_hline(yintercept = line_pos, color = "grey", linewidth = 0.5, linetype = "dashed") +
-    geom_segment(
+    dplyr::filter(
+      !is.na(baf_lower),
+      !is.na(baf_upper),
+      baf_lower >= 0,
+      baf_upper <= 1
+    )
+  
+  y_axis_theme <- ggplot2::theme(
+    axis.title.y = ggplot2::element_text(size = 10, color = "black"),
+    axis.text.y = ggplot2::element_text(size = 9, color = "black"),
+    axis.text.y.left = ggplot2::element_text(size = 9, color = "black"),
+    axis.ticks.y = ggplot2::element_line(color = "black"),
+    axis.line.y.left = ggplot2::element_line(color = "black")
+  )
+  
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_hline(
+      yintercept = 2,
+      color = "black",
+      linewidth = 0.7
+    ) +
+    ggplot2::geom_hline(
+      yintercept = line_pos,
+      color = "grey",
+      linewidth = 0.5,
+      linetype = "dashed"
+    ) +
+    ggplot2::geom_segment(
       data = df_cov,
-      aes(
+      ggplot2::aes(
         x = bin_start,
         xend = bin_end,
         y = smoothed_bin_cnf - 0.1,
@@ -354,37 +364,55 @@ PlotWgsCnvGrid <- function(df_cov, df_ai, call_seg, gender, prefix) {
       ),
       alpha = 0.2
     ) +
-    scale_color_manual(values = color) +
-    facet_grid(cols = vars(seqnames), scales = "free_x", space = "free_x") +
-    theme_minimal() +
-    scale_y_continuous(
-      limits = c(0, y_lim),
-      breaks = seq(0, y_lim),
-      labels = scales::label_number(accuracy = 0.01)
+    ggplot2::scale_color_manual(values = color, drop = FALSE) +
+    ggplot2::facet_grid(
+      cols = ggplot2::vars(seqnames),
+      scales = "free_x",
+      space = "free_x",
+      drop = FALSE
     ) +
-    labs(title = prefix, y = "Copy Number") +
-    theme(
+    ggplot2::theme_minimal() +
+    ggplot2::scale_y_continuous(
+      limits = c(0, y_lim),
+      breaks = seq(0, y_lim, by = 1),
+      labels = sprintf("%.2f", seq(0, y_lim, by = 1)),
+      expand = ggplot2::expansion(mult = c(0, 0.02))
+    ) +
+    ggplot2::labs(
+      title = prefix,
+      y = "Copy Number"
+    ) +
+    ggplot2::theme(
       legend.position = "none",
-      panel.spacing = unit(0, "lines"),
-      strip.background = element_blank(),
-      strip.text = element_text(face = "bold", size = 10),
-      plot.title = element_text(hjust = 0.5),
-      axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.line.y.left = element_line(color = "black"),
-      axis.ticks.y = element_line(color = "black"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(),
+      panel.spacing = grid::unit(0, "lines"),
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(face = "bold", size = 13),
+      plot.title = ggplot2::element_text(hjust = 0.5, size = 13),
+      axis.title.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank(),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.background = ggplot2::element_blank(),
       plot.margin = p_margin
-    )
-
-  q <- ggplot() +
-    geom_hline(yintercept = 0.5, color = "black", linewidth = 0.7) +
-    geom_hline(yintercept = c(0.25, 0.75, 1), color = "grey", linewidth = 0.5, linetype = "dashed") +
-    geom_segment(
+    ) +
+    y_axis_theme
+  
+  q <- ggplot2::ggplot() +
+    ggplot2::geom_hline(
+      yintercept = 0.5,
+      color = "black",
+      linewidth = 0.7
+    ) +
+    ggplot2::geom_hline(
+      yintercept = c(0, 0.25, 0.75, 1),
+      color = "grey",
+      linewidth = 0.5,
+      linetype = "dashed"
+    ) +
+    ggplot2::geom_segment(
       data = df_ai,
-      aes(
+      ggplot2::aes(
         x = bin_start,
         xend = bin_start,
         y = smoothed_ai - 0.05,
@@ -393,63 +421,117 @@ PlotWgsCnvGrid <- function(df_cov, df_ai, call_seg, gender, prefix) {
       ),
       alpha = 0.01
     ) +
-    scale_color_manual(values = color) +
-    geom_segment(
+    ggplot2::scale_color_manual(values = color, drop = FALSE) +
+    ggplot2::geom_segment(
       data = call_seg_maf,
-      aes(x = Start, xend = End, y = baf_lower, yend = baf_lower),
+      ggplot2::aes(
+        x = Start,
+        xend = End,
+        y = baf_lower,
+        yend = baf_lower
+      ),
       linewidth = 1,
       color = "cyan3"
     ) +
-    geom_segment(
+    ggplot2::geom_segment(
       data = call_seg_maf,
-      aes(x = Start, xend = End, y = baf_upper, yend = baf_upper),
+      ggplot2::aes(
+        x = Start,
+        xend = End,
+        y = baf_upper,
+        yend = baf_upper
+      ),
       linewidth = 1,
       color = "cyan3"
     ) +
-    facet_grid(cols = vars(seqnames), scales = "free_x", space = "free_x") +
-    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.25)) +
-    theme_minimal() +
-    labs(y = "BAF") +
-    theme(
+    ggplot2::facet_grid(
+      cols = ggplot2::vars(seqnames),
+      scales = "free_x",
+      space = "free_x",
+      drop = FALSE
+    ) +
+    ggplot2::scale_y_continuous(
+      limits = c(-0.05, 1.05),
+      breaks = c(0, 0.25, 0.5, 0.75, 1),
+      labels = sprintf("%.2f", c(0, 0.25, 0.5, 0.75, 1)),
+      expand = ggplot2::expansion(mult = c(0, 0))
+    ) +
+    ggplot2::coord_cartesian(ylim = c(-0.05, 1.05), clip = "off") +
+    ggplot2::theme_minimal() +
+    ggplot2::labs(y = "BAF") +
+    ggplot2::theme(
       legend.position = "none",
-      panel.spacing = unit(0, "lines"),
-      strip.text = element_blank(),
-      strip.background = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      axis.ticks.y = element_line(color = "black"),
-      axis.line.y.left = element_line(color = "black"),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(),
+      panel.spacing = grid::unit(0, "lines"),
+      strip.text = ggplot2::element_blank(),
+      strip.background = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank(),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.background = ggplot2::element_blank(),
       plot.margin = q_margin
-    )
-
-  quality <- ggplot() +
-    geom_segment(
+    ) +
+    y_axis_theme
+  
+  quality <- ggplot2::ggplot() +
+    ggplot2::geom_segment(
       data = call_seg,
-      aes(x = Start, xend = End, y = 0, yend = 0, color = FILTER),
+      ggplot2::aes(
+        x = Start,
+        xend = End,
+        y = 0.5,
+        yend = 0.5,
+        color = FILTER
+      ),
       linewidth = 4
     ) +
-    scale_color_manual(values = c("PASS" = "grey20", "FAILED" = "grey50")) +
-    scale_y_continuous(limits = c(0, 1), breaks = c(0, 1), labels = c("QC", "")) +
-    facet_grid(cols = vars(seqnames), scales = "free_x", space = "free_x") +
-    theme_minimal() +
-    labs(y = "") +
-    theme(
+    ggplot2::scale_color_manual(
+      values = c(
+        "PASS" = "grey20",
+        "FAILED" = "grey50"
+      ),
+      na.value = "grey20"
+    ) +
+    ggplot2::scale_y_continuous(
+      limits = c(0, 1),
+      breaks = c(0.5),
+      labels = c("QC"),
+      expand = ggplot2::expansion(mult = c(0, 0))
+    ) +
+    ggplot2::facet_grid(
+      cols = ggplot2::vars(seqnames),
+      scales = "free_x",
+      space = "free_x",
+      drop = FALSE
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::labs(y = "") +
+    ggplot2::theme(
       legend.position = "none",
-      strip.text = element_blank(),
-      panel.spacing = unit(0, "lines"),
-      strip.background = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text.x = element_blank(),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.background = element_blank(),
-      plot.margin = unit(c(0, 1, 0.5, 2), "pt")
+      strip.text = ggplot2::element_blank(),
+      panel.spacing = grid::unit(0, "lines"),
+      strip.background = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_text(size = 12, color = "black"),
+      axis.text.y.left = ggplot2::element_text(size = 12, color = "black"),
+      axis.ticks.y = ggplot2::element_blank(),
+      axis.line.y.left = ggplot2::element_line(color = "black"),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.background = ggplot2::element_blank(),
+      plot.margin = qc_margin
     )
-
-  gridExtra::arrangeGrob(p, q, quality, ncol = 1, heights = c(5, 3, 1))
+  
+  gridExtra::arrangeGrob(
+    p,
+    q,
+    quality,
+    ncol = 1,
+    heights = c(5, 3, 0.7)
+  )
 }
 
 BuildWgsDragenCnvPlotFromCachedData <- function(
@@ -551,36 +633,110 @@ ReadDragenModelGrid <- function(model_file) {
   models
 }
 
-BuildWgsDragenModelPlotFromGrid <- function(models, user_purity, user_coverage, sample_name = "Sample") {
+BuildWgsDragenModelPlotFromGrid <- function(
+    models,
+    user_purity,
+    user_coverage,
+    sample_name = "Sample"
+) {
   max_model <- models[which.max(models$logL), , drop = FALSE]
-
-  ggplot(models, aes(x = Purity, y = Coverage, fill = logL)) +
-    geom_tile() +
-    geom_point(
+  
+  coverage_breaks <- pretty(
+    range(models$Coverage, user_coverage, na.rm = TRUE),
+    n = 6
+  )
+  
+  ggplot2::ggplot(
+    models,
+    ggplot2::aes(
+      x = Purity,
+      y = Coverage,
+      fill = logL
+    )
+  ) +
+    ggplot2::geom_tile() +
+    ggplot2::geom_point(
       data = max_model,
-      aes(x = Purity, y = Coverage),
+      ggplot2::aes(
+        x = Purity,
+        y = Coverage
+      ),
       color = "red",
-      size = 5,
+      size = 6,
       inherit.aes = FALSE
     ) +
-    geom_point(
-      data = data.frame(Purity = user_purity, Coverage = user_coverage),
-      aes(x = Purity, y = Coverage),
+    ggplot2::geom_point(
+      data = data.frame(
+        Purity = user_purity,
+        Coverage = user_coverage
+      ),
+      ggplot2::aes(
+        x = Purity,
+        y = Coverage
+      ),
       color = "blue",
-      size = 3,
+      size = 4,
       inherit.aes = FALSE
     ) +
-    scale_fill_gradient(low = "navy", high = "yellow") +
-    labs(
+    ggplot2::scale_fill_gradient(
+      low = "navy",
+      high = "yellow"
+    ) +
+    ggplot2::scale_x_continuous(
+      breaks = seq(0, 1, by = 0.1),
+      labels = sprintf("%.2f", seq(0, 1, by = 0.1)),
+      expand = ggplot2::expansion(mult = c(0.02, 0.02))
+    ) +
+    ggplot2::scale_y_continuous(
+      breaks = coverage_breaks,
+      labels = sprintf("%.0f", coverage_breaks),
+      expand = ggplot2::expansion(mult = c(0.02, 0.02))
+    ) +
+    ggplot2::labs(
       title = paste0(sample_name, " model plot"),
       x = "Purity",
       y = "Diploid Coverage",
       fill = "logL"
     ) +
-    theme_bw() +
-    theme(
-      plot.title = element_text(hjust = 0.5),
-      panel.grid = element_blank()
+    ggplot2::theme_bw(base_size = 14) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(
+        hjust = 0.5,
+        size = 18,
+        face = "bold",
+        color = "black",
+        margin = ggplot2::margin(b = 8)
+      ),
+      axis.title.x = ggplot2::element_text(
+        size = 16,
+        color = "black",
+        margin = ggplot2::margin(t = 8)
+      ),
+      axis.title.y = ggplot2::element_text(
+        size = 16,
+        color = "black",
+        margin = ggplot2::margin(r = 8)
+      ),
+      axis.text.x = ggplot2::element_text(
+        size = 13,
+        color = "black"
+      ),
+      axis.text.y = ggplot2::element_text(
+        size = 13,
+        color = "black"
+      ),
+      axis.ticks = ggplot2::element_line(color = "black"),
+      axis.line = ggplot2::element_line(color = "black"),
+      legend.title = ggplot2::element_text(size = 13, color = "black"),
+      legend.text = ggplot2::element_text(size = 12, color = "black"),
+      panel.grid = ggplot2::element_blank(),
+      plot.margin = ggplot2::margin(
+        t = 18,
+        r = 20,
+        b = 18,
+        l = 20,
+        unit = "pt"
+      )
     )
 }
 
